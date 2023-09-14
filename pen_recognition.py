@@ -42,7 +42,7 @@ profile = pipeline.start(config)
 # Getting the depth sensor's depth scale (see rs-align example for explanation)
 depth_sensor = profile.get_device().first_depth_sensor()
 depth_scale = depth_sensor.get_depth_scale()
-print("Depth Scale is: " , depth_scale)
+# print("Depth Scale is: " , depth_scale)
 
 # We will be removing the background of objects more than
 #  clipping_distance_in_meters meters away
@@ -62,25 +62,25 @@ def nothing(x):
 cv2.namedWindow('image')
 
 # create trackbars for color change
-cv2.createTrackbar('H1','image',220,360, nothing)
-cv2.createTrackbar('S1','image',50,255, nothing)
-cv2.createTrackbar('V1','image',50,255, nothing)
+# cv2.createTrackbar('H1','image',220,360, nothing)
+# cv2.createTrackbar('S1','image',50,255, nothing)
+# cv2.createTrackbar('V1','image',50,255, nothing)
 
-cv2.createTrackbar('H2','image',270,360, nothing)
-cv2.createTrackbar('S2','image',255,255, nothing)
-cv2.createTrackbar('V2','image',255,255, nothing)
+# cv2.createTrackbar('H2','image',270,360, nothing)
+# cv2.createTrackbar('S2','image',255,255, nothing)
+# cv2.createTrackbar('V2','image',255,255, nothing)
 
 # Streaming loop
 try:
     while True:
         # get current positions of four trackbars
-        h1 = cv2.getTrackbarPos('H1','image') / 2
-        s1 = cv2.getTrackbarPos('S1','image')
-        v1 = cv2.getTrackbarPos('V1','image')
+        # h1 = cv2.getTrackbarPos('H1','image') / 2
+        # s1 = cv2.getTrackbarPos('S1','image')
+        # v1 = cv2.getTrackbarPos('V1','image')
 
-        h2 = cv2.getTrackbarPos('H2','image') / 2
-        s2 = cv2.getTrackbarPos('S2','image')
-        v2 = cv2.getTrackbarPos('V2','image')
+        # h2 = cv2.getTrackbarPos('H2','image') / 2
+        # s2 = cv2.getTrackbarPos('S2','image')
+        # v2 = cv2.getTrackbarPos('V2','image')
 
         # Get frameset of color and depth
         frames = pipeline.wait_for_frames()
@@ -103,11 +103,11 @@ try:
         # convert the BGR image to HSV
         hsv = cv2.cvtColor(color_image, cv2.COLOR_BGR2HSV)
 
-        print(s)
-        print(type(s))
+        # print(s)
+        # print(type(s))
 
-        lower_bound = np.array([h1,s1,v1])
-        upper_bound = np.array([h2,s2,v2])
+        lower_bound = np.array([225/2,97,0])
+        upper_bound = np.array([305/2,255,255])
 
         # lower_bound = np.array([170,50,50])
         # upper_bound = np.array([170,255,255])
@@ -117,6 +117,9 @@ try:
 
         # threshold the HSV image to get purple colors within our range
         mask = cv2.inRange(hsv, lower_bound, upper_bound)
+
+        masked_depth_image = cv2.bitwise_and(depth_image,depth_image, mask= mask)
+        # cv2.imshow('image2', depth_image)
 
         # bitwise-AND mask and original image
         masked_image = cv2.bitwise_and(color_image, color_image, mask= mask)
@@ -132,9 +135,43 @@ try:
         depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
         images = np.hstack((bg_removed, depth_colormap))
 
+        
+
+        erosion_size = 1
+        element = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * erosion_size + 1, 2 * erosion_size + 1),(erosion_size, erosion_size))
+
+        erosion_dst = cv2.erode(masked_image, element)
+
+        dilation_size = 1
+        element = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * dilation_size + 1, 2 * dilation_size + 1), (dilation_size, dilation_size))
+
+        dilation_dst = cv2.dilate(erosion_dst, element)
+
+        temp = cv2.cvtColor(dilation_dst,cv2.COLOR_BGR2GRAY)
+
+        # drawing contours
+        contours, hierarchy = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+        cv2.drawContours(masked_image, contours, -1, (0,255,0), 3)
+
+        # print(f"temp: {temp}")
+        # print(np.shape(contours))
+        try:
+            M = cv2.moments(contours[0])
+            
+            cx = int(M['m10']/M['m00'])
+            cy = int(M['m01']/M['m00'])
+
+            cv2.circle(dilation_dst,(cx,cy),2,0)
+        except:
+            print("could not find moments")
+
+        # print(f"moment: {M}")
+
+        
+
         # cv2.imshow('original', hsv)
         # cv2.imshow('mask', mask)
-        cv2.imshow('image', images)
+        cv2.imshow('image', dilation_dst)
         key = cv2.waitKey(1) & 0xFF
         if key & 0xFF == ord('q') or key == 27:
             cv2.destroyAllWindows()
