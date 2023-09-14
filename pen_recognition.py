@@ -135,7 +135,9 @@ try:
         depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
         images = np.hstack((bg_removed, depth_colormap))
 
-        
+        # drawing contours
+        contours, hierarchy = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+        cv2.drawContours(masked_image, contours, -1, (0,255,0), 3)
 
         erosion_size = 1
         element = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * erosion_size + 1, 2 * erosion_size + 1),(erosion_size, erosion_size))
@@ -147,21 +149,30 @@ try:
 
         dilation_dst = cv2.dilate(erosion_dst, element)
 
+        # erosion_size = 3
+        # element = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * dilation_size + 1, 2 * dilation_size + 1), (erosion_size, erosion_size))
+
+        # erosion_dst = cv2.erode(dilation_dst, element)
+
+        # dilation_size = 1
+        # element = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * dilation_size + 1, 2 * dilation_size + 1), (dilation_size, dilation_size))
+
+        # dilation_dst = cv2.dilate(erosion_dst, element)
+
         temp = cv2.cvtColor(dilation_dst,cv2.COLOR_BGR2GRAY)
 
-        # drawing contours
-        contours, hierarchy = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
-        cv2.drawContours(masked_image, contours, -1, (0,255,0), 3)
+        
 
         # print(f"temp: {temp}")
         # print(np.shape(contours))
         try:
-            M = cv2.moments(contours[0])
+            max_contour = max(contours, key = cv2.contourArea)
+            M = cv2.moments(max_contour)
             
             cx = int(M['m10']/M['m00'])
             cy = int(M['m01']/M['m00'])
 
-            cv2.circle(dilation_dst,(cx,cy),2,0)
+            cv2.circle(dilation_dst,(cx,cy),10,(255,255,255),-1)
         except:
             print("could not find moments")
 
