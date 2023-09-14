@@ -62,19 +62,25 @@ def nothing(x):
 cv2.namedWindow('image')
 
 # create trackbars for color change
-cv2.createTrackbar('H','image',270,360, nothing)
-cv2.createTrackbar('S','image',255,255, nothing)
-cv2.createTrackbar('V','image',123,255, nothing)
-cv2.createTrackbar('delta','image',10,50, nothing)
+cv2.createTrackbar('H1','image',220,360, nothing)
+cv2.createTrackbar('S1','image',50,255, nothing)
+cv2.createTrackbar('V1','image',50,255, nothing)
+
+cv2.createTrackbar('H2','image',270,360, nothing)
+cv2.createTrackbar('S2','image',255,255, nothing)
+cv2.createTrackbar('V2','image',255,255, nothing)
 
 # Streaming loop
 try:
     while True:
         # get current positions of four trackbars
-        h = cv2.getTrackbarPos('H','image') / 2
-        s = cv2.getTrackbarPos('S','image')
-        v = cv2.getTrackbarPos('V','image')
-        d = cv2.getTrackbarPos('delta','image')
+        h1 = cv2.getTrackbarPos('H1','image') / 2
+        s1 = cv2.getTrackbarPos('S1','image')
+        v1 = cv2.getTrackbarPos('V1','image')
+
+        h2 = cv2.getTrackbarPos('H2','image') / 2
+        s2 = cv2.getTrackbarPos('S2','image')
+        v2 = cv2.getTrackbarPos('V2','image')
 
         # Get frameset of color and depth
         frames = pipeline.wait_for_frames()
@@ -97,10 +103,17 @@ try:
         # convert the BGR image to HSV
         hsv = cv2.cvtColor(color_image, cv2.COLOR_BGR2HSV)
 
-        lower_bound = np.array([h-d,s,v])
-        upper_bound = np.array([h+d,s,v])
+        print(s)
+        print(type(s))
 
-        print(f"lower bound: {lower_bound}, upper bound: {upper_bound}")
+        lower_bound = np.array([h1,s1,v1])
+        upper_bound = np.array([h2,s2,v2])
+
+        # lower_bound = np.array([170,50,50])
+        # upper_bound = np.array([170,255,255])
+        
+
+        # print(f"lower bound: {lower_bound}, upper bound: {upper_bound}")
 
         # threshold the HSV image to get purple colors within our range
         mask = cv2.inRange(hsv, lower_bound, upper_bound)
@@ -108,9 +121,20 @@ try:
         # bitwise-AND mask and original image
         masked_image = cv2.bitwise_and(color_image, color_image, mask= mask)
 
-        cv2.imshow('original', color_image)
-        cv2.imshow('mask', mask)
-        cv2.imshow('image', masked_image)
+        # Remove background - Set pixels further than clipping_distance to grey
+        grey_color = 153
+        depth_image_3d = np.dstack((depth_image,depth_image,depth_image)) #depth image is 1 channel, color is 3 channels
+        bg_removed = np.where((depth_image_3d > clipping_distance) | (depth_image_3d <= 0), grey_color, masked_image)
+
+        # Render images:
+        #   depth align to color on left
+        #   depth on right
+        depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
+        images = np.hstack((bg_removed, depth_colormap))
+
+        # cv2.imshow('original', hsv)
+        # cv2.imshow('mask', mask)
+        cv2.imshow('image', images)
         key = cv2.waitKey(1) & 0xFF
         if key & 0xFF == ord('q') or key == 27:
             cv2.destroyAllWindows()
