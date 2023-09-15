@@ -25,9 +25,8 @@
 from interbotix_xs_modules.xs_robot.arm import InterbotixManipulatorXS
 import numpy as np
 import sys
-import pen_recognition
+import math
 
-pen_recognition.main()
 # This script makes the end-effector perform pick, pour, and place tasks
 # Note that this script may not work for every arm as it was designed for the wx250
 # Make sure to adjust commanded joint positions and poses as necessary
@@ -35,19 +34,63 @@ pen_recognition.main()
 # To get started, open a terminal and type 'roslaunch interbotix_xsarm_control xsarm_control.launch robot_model:=wx250'
 # Then change to this directory and type 'python bartender.py  # python3 bartender.py if using ROS Noetic'
 
-def main(x,y,z):
-    bot = InterbotixManipulatorXS("px100", "arm", "gripper")
+bot = InterbotixManipulatorXS("px100", "arm", "gripper")
+ee_origin = [145, 412, -90] # from camera perspective: (y,x,z)
 
-    bot.arm.go_to_home_pose()
+def camera_coor_to_robot_coor(camera_point):
+    robot_point = [-float(camera_point[1]),float(camera_point[0]),float(camera_point[2])]
+    return robot_point
 
-    bot.gripper.grasp(2.0)
-    bot.gripper.set_pressure(1.0)
+def main():
+    f = open("/tmp/cv_fifo", "r")
+    camera_point = []
 
-    bot.arm.set_ee_pose_components(x=0.01, y=0, z=0.25)
-    
-    bot.gripper.release(2.0)
-    # bot.arm.go_to_home_pose()
-    # bot.arm.go_to_sleep_pose()
+    for i in range(3):
+        camera_point.append(f.readline())
+        print(camera_point[i])
+
+    # ROUTINE
+    robot_point = camera_coor_to_robot_coor(camera_point)
+    print(f"origin_point: {ee_origin}")
+    print(f"robot_point: {robot_point}")
+    print(f"x move: {ee_origin[0] - robot_point[0]}, y move: {ee_origin[1] - robot_point[1]}, z move: {ee_origin[2] - robot_point[2]}")
+    # bot.arm.go_to_home_pose()robot_point
+
+    # Differences
+    xDiff = ee_origin[0] - robot_point[0]
+    yDiff = ee_origin[1] - robot_point[1]
+    zDiff = ee_origin[2] - robot_point[2]
+
+    # direction factors
+    xDir = xDiff/abs(xDiff)
+    yDir = yDiff/abs(yDiff)
+    zDir = zDiff/abs(zDiff)
+
+    xD = (ee_origin[0] - robot_point[0])/1000
+    # if ee_origin[0] > robot_point[0]: xD *= -1
+
+    yD = (ee_origin[1] - robot_point[1])/1000
+    # if ee_origin[1] > robot_point[1]: yD *= -1
+
+    zD = (ee_origin[2] - robot_point[2])/1000
+    if ee_origin[2] > robot_point[2]: 
+        print(f"zD1: {zD}")
+        zD = zD * -1
+        print("true")
+
+    print(f"xD: {xD}, yD: {yD}, zd: {zD}")
+
+    # bot.gripper.grasp(2.0)
+    # bot.gripper.set_pressure(1.0)
+
+    try:
+        bot.arm.set_ee_cartesian_trajectory(x=xD,z=zD)
+        bot.gripper.grasp(1)
+        bot.arm.go_to_sleep_pose()
+        bot.gripper.release(1)
+    except:
+        pass
+
 
 if __name__=='__main__':
     main()

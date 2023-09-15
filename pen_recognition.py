@@ -7,10 +7,18 @@ import numpy as np
 # Import OpenCV for easy image rendering
 import cv2
 
+# import robot_control
+
+def writeToFIFO(f,point):
+    
+    f.write(point)
+    f.flush
 
 def main():
     # Create a pipeline
     pipeline = rs.pipeline()
+
+    f = open("/tmp/cv_fifo", "w")
 
     # Create a config and configure the pipeline to stream
     #  different resolutions of color and depth streams
@@ -75,6 +83,9 @@ def main():
     cv2.createTrackbar('V2','image',255,255, nothing)
 
     # Streaming loop
+
+    points = []
+
     try:
         while True:
             # get current positions of four trackbars
@@ -138,9 +149,33 @@ def main():
                 depth = depth_area.mean()
 
                 point = rs.rs2_deproject_pixel_to_point(intr, [cx,cy], depth)
-                # print(point)
+                point = [point[2],point[0],-point[1]]
 
-                text = f"(x: {round(point[2])}, y: {round(-point[0])}, z: {round(-point[1])})"
+                points.append(point)
+                # print(f"point: {point}")
+
+                if len(points) > 50:
+                    points_array = np.array(points)
+                    avg_x = np.mean(points_array[:,0])
+                    avg_y = np.mean(points_array[:,1])
+                    avg_z = np.mean(points_array[:,2])
+
+                    std_x = np.std(points_array[:,0])
+                    std_y = np.std(points_array[:,1])
+                    std_z = np.std(points_array[:,2])
+
+                    print(f"avg_x: {avg_x}, avg_y: {avg_y}, avg_z: {avg_z}")
+                    print(f"std_x: {std_x}, std_y: {std_y}, std_z: {std_z}")
+
+                    points.clear()
+
+                    thresh = 30
+                    if std_x < thresh and std_y < thresh and std_z < thresh:
+                        point = [avg_x, avg_y, avg_z]
+                        f.write(str(point[0]) + "\n" + str(point[1]) + "\n" + str(point[2]) + "\n")
+                        f.flush()
+
+                text = f"(x: {round(point[0])}, y: {round(point[1])}, z: {round(point[2])})"
 
                 color_image = cv2.putText(color_image, text, (cx-100,cy+40),cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,255,255), 1)
 
