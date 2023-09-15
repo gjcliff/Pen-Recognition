@@ -135,36 +135,15 @@ try:
         depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
         images = np.hstack((bg_removed, depth_colormap))
 
+        eroded_img = cv2.erode(masked_image, np.ones((5,5)))
+        dilated_img = cv2.erode(eroded_img, np.ones((5,5)))
+
+        closed_img = cv2.morphologyEx(dilated_img, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (5,5)), iterations=10)
+
         # drawing contours
-        contours, hierarchy = cv2.findContours(mask, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
+        contours, hierarchy = cv2.findContours(closed_img, cv2.RETR_LIST, cv2.CHAIN_APPROX_NONE)
         cv2.drawContours(masked_image, contours, -1, (0,255,0), 3)
 
-        erosion_size = 1
-        element = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * erosion_size + 1, 2 * erosion_size + 1),(erosion_size, erosion_size))
-
-        erosion_dst = cv2.erode(masked_image, element)
-
-        dilation_size = 1
-        element = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * dilation_size + 1, 2 * dilation_size + 1), (dilation_size, dilation_size))
-
-        dilation_dst = cv2.dilate(erosion_dst, element)
-
-        # erosion_size = 3
-        # element = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * dilation_size + 1, 2 * dilation_size + 1), (erosion_size, erosion_size))
-
-        # erosion_dst = cv2.erode(dilation_dst, element)
-
-        # dilation_size = 1
-        # element = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * dilation_size + 1, 2 * dilation_size + 1), (dilation_size, dilation_size))
-
-        # dilation_dst = cv2.dilate(erosion_dst, element)
-
-        temp = cv2.cvtColor(dilation_dst,cv2.COLOR_BGR2GRAY)
-
-        
-
-        # print(f"temp: {temp}")
-        # print(np.shape(contours))
         try:
             max_contour = max(contours, key = cv2.contourArea)
             M = cv2.moments(max_contour)
@@ -172,9 +151,9 @@ try:
             cx = int(M['m10']/M['m00'])
             cy = int(M['m01']/M['m00'])
 
-            cv2.circle(dilation_dst,(cx,cy),10,(255,255,255),-1)
+            cv2.circle(closed_img,(cx,cy),10,(255,255,255),-1)
         except:
-            print("could not find moments")
+            pass
 
         # print(f"moment: {M}")
 
@@ -182,7 +161,7 @@ try:
 
         # cv2.imshow('original', hsv)
         # cv2.imshow('mask', mask)
-        cv2.imshow('image', dilation_dst)
+        cv2.imshow('image', closed_img)
         key = cv2.waitKey(1) & 0xFF
         if key & 0xFF == ord('q') or key == 27:
             cv2.destroyAllWindows()
