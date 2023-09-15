@@ -25,7 +25,9 @@
 from interbotix_xs_modules.xs_robot.arm import InterbotixManipulatorXS
 import numpy as np
 import sys
+import pen_recognition
 
+pen_recognition.main()
 # This script makes the end-effector perform pick, pour, and place tasks
 # Note that this script may not work for every arm as it was designed for the wx250
 # Make sure to adjust commanded joint positions and poses as necessary
@@ -33,7 +35,7 @@ import sys
 # To get started, open a terminal and type 'roslaunch interbotix_xsarm_control xsarm_control.launch robot_model:=wx250'
 # Then change to this directory and type 'python bartender.py  # python3 bartender.py if using ROS Noetic'
 
-def main():
+def main(x,y,z):
     bot = InterbotixManipulatorXS("px100", "arm", "gripper")
 
     bot.arm.go_to_home_pose()
@@ -41,7 +43,7 @@ def main():
     bot.gripper.grasp(2.0)
     bot.gripper.set_pressure(1.0)
 
-    bot.arm.set_ee_pose_components(x=-0.1, y=-0.1, z=0.25)
+    bot.arm.set_ee_pose_components(x=0.01, y=0, z=0.25)
     
     bot.gripper.release(2.0)
     # bot.arm.go_to_home_pose()
