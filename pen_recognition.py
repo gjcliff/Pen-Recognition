@@ -130,10 +130,10 @@ def main():
             # bitwise-AND mask and original image
             # masked_image = cv2.bitwise_and(color_image, color_image, mask= mask)
 
-            eroded_img = cv2.erode(mask, np.ones((5,5)))
-            dilated_img = cv2.erode(eroded_img, np.ones((10,10)))
+            eroded_img = cv2.erode(mask, np.ones((2,2)))
+            dilated_img = cv2.erode(eroded_img, np.ones((2,2)))
 
-            closed_img = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (5,5)), iterations=5)
+            closed_img = cv2.morphologyEx(dilated_img, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (5,5)), iterations=5)
 
             # drawing contours
             contours, hierarchy = cv2.findContours(closed_img, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)

@@ -24,8 +24,6 @@
 
 from interbotix_xs_modules.xs_robot.arm import InterbotixManipulatorXS
 import numpy as np
-import sys
-import math
 
 # This script makes the end-effector perform pick, pour, and place tasks
 # Note that this script may not work for every arm as it was designed for the wx250
@@ -35,7 +33,7 @@ import math
 # Then change to this directory and type 'python bartender.py  # python3 bartender.py if using ROS Noetic'
 
 bot = InterbotixManipulatorXS("px100", "arm", "gripper")
-ee_origin = [145, 412, -90] # from camera perspective: (y,x,z)
+ee_origin = [160, 412, -90] # from camera perspective: (y,x,z)
 
 def camera_coor_to_robot_coor(camera_point):
     robot_point = [-float(camera_point[1]),float(camera_point[0]),float(camera_point[2])]
@@ -66,17 +64,13 @@ def main():
     yDir = yDiff/abs(yDiff)
     zDir = zDiff/abs(zDiff)
 
-    xD = (ee_origin[0] - robot_point[0])/1000
+    xD = (xDiff * xDir)/1000
     # if ee_origin[0] > robot_point[0]: xD *= -1
 
-    yD = (ee_origin[1] - robot_point[1])/1000
+    yD = (yDiff * yDir)/1000
     # if ee_origin[1] > robot_point[1]: yD *= -1
 
-    zD = (ee_origin[2] - robot_point[2])/1000
-    if ee_origin[2] > robot_point[2]: 
-        print(f"zD1: {zD}")
-        zD = zD * -1
-        print("true")
+    zD = (zDiff * zDir)/1000
 
     print(f"xD: {xD}, yD: {yD}, zd: {zD}")
 
