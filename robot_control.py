@@ -12,12 +12,11 @@ import math
 # Then change to this directory and type 'python bartender.py  # python3 bartender.py if using ROS Noetic'
 
 bot = InterbotixManipulatorXS("px100", "arm", "gripper")
-ee_origin = [150, 436, -90] # from camera perspective: (y,x,z)
+ee_origin = [436, 150, -90] # from camera perspective: (x, y, z)
 
 def camera_coor_to_robot_coor(camera_point):
     robot_point = [-float(camera_point[1]),float(camera_point[0]),float(camera_point[2])]
     return robot_point
-
 def main():
     f = open("/tmp/cv_fifo", "r")
     camera_point = []
@@ -33,24 +32,26 @@ def main():
     print(f"x move: {ee_origin[0] - robot_point[0]}, y move: {ee_origin[1] - robot_point[1]}, z move: {ee_origin[2] - robot_point[2]}")
     # bot.arm.go_to_home_pose()robot_point
 
-    y = ee_origin[1] - robot_point[1]
-    x = ee_origin[0] - robot_point[0]
-    print(f"y: {y}, x: {x}")
-    angle = np.arctan2(y,x)
-    print(f"angle: {angle}")
+    # y = ee_origin[1] - robot_point[1]
+    # x = (ee_origin[0] - robot_point[0]) * -1
+    # print(f"y: {y}, x: {x}")
+    
+    # print(f"angle: {angle}")
 
     # Differences
-    xDiff = math.sqrt((robot_point[0]-ee_origin[0])**2 + (robot_point[1]-ee_origin[1])**2)
-    print(xDiff)
-    zDiff = ee_origin[2] - robot_point[2]
+    xDiff = ee_origin[1] - robot_point[1]
+    yDiff = (ee_origin[0] - robot_point[0]) * -1
+    zDiff = (ee_origin[2] - robot_point[2]) * -1
 
-    # direction factors
-    xDir = xDiff / abs(xDiff)
-    zDir = zDiff / abs(zDiff)
+    angle = np.arctan2(yDiff,xDiff)
 
-    xD = (xDiff * xDir)/1000
+    # # direction factors
+    # xDir = xDiff / abs(xDiff)
+    # zDir = zDiff / abs(zDiff)
 
-    zD = (zDiff * zDir)/1000
+    xD = (xDiff)/1000
+
+    zD = (zDiff)/1000
 
     print(f"xD: {xD} zd: {zD}")
 
