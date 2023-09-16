@@ -17,12 +17,16 @@ def writeToFIFO(f,point):
 def main():
     # Create a pipeline
     pipeline = rs.pipeline()
+    # Create a config and configure the pipeline to stream
+    config = rs.config()
 
     f = open("/tmp/cv_fifo", "w")
 
-    # Create a config and configure the pipeline to stream
-    #  different resolutions of color and depth streams
-    config = rs.config()
+    w = 848
+    h = 480
+    fps = 60
+    config.enable_stream(rs.stream.depth, w, h, rs.format.z16, fps)
+    config.enable_stream(rs.stream.color, w, h, rs.format.bgr8, fps)
 
     # Get device product line for setting a supporting resolution
     pipeline_wrapper = rs.pipeline_wrapper(pipeline)
@@ -30,26 +34,47 @@ def main():
     device = pipeline_profile.get_device()
     device_product_line = str(device.get_info(rs.camera_info.product_line))
 
-    found_rgb = False
-    for s in device.sensors:
-        if s.get_info(rs.camera_info.name) == 'RGB Camera':
-            found_rgb = True
-            break
-    if not found_rgb:
-        print("The demo requires Depth camera with Color sensor")
-        exit(0)
+    # found_rgb = False
+    # for s in device.sensors:
+    #     if s.get_info(rs.camera_info.name) == 'RGB Camera':
+    #         found_rgb = True
+    #         break
+    # if not found_rgb:
+    #     print("The demo requires Depth camera with Color sensor")
+    #     exit(0)
 
-    config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
+    # config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
 
-    if device_product_line == 'L500':
-        config.enable_stream(rs.stream.color, 960, 540, rs.format.bgr8, 30)
-    else:
-        config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
+    # if device_product_line == 'L500':
+    #     config.enable_stream(rs.stream.color, 960, 540, rs.format.bgr8, 30)
+    # else:
+    #     config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
 
-    # Start streaming
-    profile = pipeline.start(config)
-    prof = profile.get_stream(rs.stream.color)
-    intr = prof.as_video_stream_profile().get_intrinsics()
+    # # Start streaming
+    # profile = pipeline.start(config)
+    # prof = profile.get_stream(rs.stream.color)
+    # intr = prof.as_video_stream_profile().get_intrinsics()
+
+        # Note in the example code, cfg is misleadingly called "profile" but cfg is a better name
+    cfg = pipeline.start(config)
+    profile = cfg.get_stream(rs.stream.color)
+    intr = profile.as_video_stream_profile().get_intrinsics()
+
+    # enable advanced mode and load parameters
+    device = cfg.get_device()
+    advnc_mode = rs.rs400_advanced_mode(device)
+    print("Advanced mode is", "enabled" if advnc_mode.is_enabled() else "disabled")
+
+    with open("high_density_preset.json") as file:
+        json_config_str = file.read()
+        advnc_mode.load_json(json_config_str)
+
+    # device_product_line = str(device.get_info(rs.camera_info.product_line))
+    decimation_filter = rs.decimation_filter(2)
+    hole_filter = rs.hole_filling_filter(2)
+    spatial_filter = rs.spatial_filter(0.4, 21, 2, 4)
+    temporal_filter = rs.temporal_filter(0.40, 31, 3)
+    threshold_filter = rs.threshold_filter(0.1, 1.5)
 
     # Getting the depth sensor's depth scale (see rs-align example for explanation)
     depth_sensor = profile.get_device().first_depth_sensor()
@@ -58,14 +83,28 @@ def main():
 
     # We will be removing the background of objects more than
     #  clipping_distance_in_meters meters away
-    clipping_distance_in_meters = 1 #1 meter
-    clipping_distance = clipping_distance_in_meters / depth_scale
+    # clipping_distance_in_meters = 1 #1 meter
+    # clipping_distance = clipping_distance_in_meters / depth_scale
 
     # Create an align object
     # rs.align allows us to perform alignment of depth frames to others frames
     # The "align_to" is the stream type to which we plan to align depth frames.
     align_to = rs.stream.color
     align = rs.align(align_to)
+
+    # define kalman filter for smoother pen tracking
+    kalman = cv2.KalmanFilter(6, 3)
+    kalman.measurementMatrix = np.array(
+        [[1, 0, 0, 0, 0, 0],
+         [0, 1, 0, 0, 0, 0],
+         [0, 0, 1, 0, 0, 0]], np.float32)
+    kalman.transitionMatrix = np.array(
+        [[1, 0, 0, 1/fps, 0, 0],
+         [0, 1, 0, 0, 1/fps, 0],
+         [0, 0, 1, 0, 0, 1/fps],
+         [0, 0, 0, 1, 0, 0],
+         [0, 0, 0, 0, 1, 0],
+         [0, 0, 0, 0, 0, 1],], np.float32)
 
     def nothing(x):
         pass
@@ -113,6 +152,8 @@ def main():
                 continue
 
             depth_image = np.asanyarray(aligned_depth_frame.get_data())
+            depth_image = cv2.resize(
+                depth_image, (w, h), interpolation=cv2.INTER_AREA)
             color_image = np.asanyarray(color_frame.get_data())
 
             # convert the BGR image to HSV
