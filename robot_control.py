@@ -49,7 +49,7 @@ def main():
     # xDir = xDiff / abs(xDiff)
     # zDir = zDiff / abs(zDiff)
 
-    xD = (xDiff)/1000
+    xD = math.sqrt(xDiff**2 + yDiff**2) # it doesn't matter if the pen is in the positive or negative x direction, the robot turns and then any point is in the positive x direction
 
     zD = (zDiff)/1000
 
