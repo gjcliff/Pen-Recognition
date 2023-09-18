@@ -7,12 +7,8 @@ import numpy as np
 # Import OpenCV for easy image rendering
 import cv2
 
-# import robot_control
-
-def writeToFIFO(f,point):
-    
-    f.write(point)
-    f.flush
+def nothing(x):
+    pass
 
 def main():
     # Create a pipeline
@@ -20,7 +16,14 @@ def main():
     # Create a config and configure the pipeline to stream
     config = rs.config()
 
-    f = open("/tmp/cv_fifo", "w")
+    # Create a pipeline
+    pipeline = rs.pipeline()
+    # Create a config and configure the pipeline to stream
+    config = rs.config()
+
+    f1 = open("/tmp/cv_fifo", "w")
+    with open("fifo_empty.txt", "w") as file:
+        file.write("0")
 
     w = 848
     h = 480
@@ -28,34 +31,7 @@ def main():
     config.enable_stream(rs.stream.depth, w, h, rs.format.z16, fps)
     config.enable_stream(rs.stream.color, w, h, rs.format.bgr8, fps)
 
-    # Get device product line for setting a supporting resolution
-    pipeline_wrapper = rs.pipeline_wrapper(pipeline)
-    pipeline_profile = config.resolve(pipeline_wrapper)
-    device = pipeline_profile.get_device()
-    device_product_line = str(device.get_info(rs.camera_info.product_line))
-
-    # found_rgb = False
-    # for s in device.sensors:
-    #     if s.get_info(rs.camera_info.name) == 'RGB Camera':
-    #         found_rgb = True
-    #         break
-    # if not found_rgb:
-    #     print("The demo requires Depth camera with Color sensor")
-    #     exit(0)
-
-    # config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-
-    # if device_product_line == 'L500':
-    #     config.enable_stream(rs.stream.color, 960, 540, rs.format.bgr8, 30)
-    # else:
-    #     config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-
-    # # Start streaming
-    # profile = pipeline.start(config)
-    # prof = profile.get_stream(rs.stream.color)
-    # intr = prof.as_video_stream_profile().get_intrinsics()
-
-        # Note in the example code, cfg is misleadingly called "profile" but cfg is a better name
+    # Note in the example code, cfg is misleadingly called "profile" but cfg is a better name
     cfg = pipeline.start(config)
     profile = cfg.get_stream(rs.stream.color)
     intr = profile.as_video_stream_profile().get_intrinsics()
@@ -77,7 +53,7 @@ def main():
     threshold_filter = rs.threshold_filter(0.1, 1.5)
 
     # Getting the depth sensor's depth scale (see rs-align example for explanation)
-    depth_sensor = profile.get_device().first_depth_sensor()
+    depth_sensor = device.first_depth_sensor()
     depth_scale = depth_sensor.get_depth_scale()
     # print("Depth Scale is: " , depth_scale)
 
@@ -92,29 +68,12 @@ def main():
     align_to = rs.stream.color
     align = rs.align(align_to)
 
-    # define kalman filter for smoother pen tracking
-    kalman = cv2.KalmanFilter(6, 3)
-    kalman.measurementMatrix = np.array(
-        [[1, 0, 0, 0, 0, 0],
-         [0, 1, 0, 0, 0, 0],
-         [0, 0, 1, 0, 0, 0]], np.float32)
-    kalman.transitionMatrix = np.array(
-        [[1, 0, 0, 1/fps, 0, 0],
-         [0, 1, 0, 0, 1/fps, 0],
-         [0, 0, 1, 0, 0, 1/fps],
-         [0, 0, 0, 1, 0, 0],
-         [0, 0, 0, 0, 1, 0],
-         [0, 0, 0, 0, 0, 1],], np.float32)
-
-    def nothing(x):
-        pass
-
     #opencv
     cv2.namedWindow('image')
 
     # create trackbars for color change
-    cv2.createTrackbar('H1','image',225,360, nothing)
-    cv2.createTrackbar('S1','image',97,255, nothing)
+    cv2.createTrackbar('H1','image',207,360, nothing)
+    cv2.createTrackbar('S1','image',90,255, nothing)
     cv2.createTrackbar('V1','image',0,255, nothing)
 
     cv2.createTrackbar('H2','image',305,360, nothing)
@@ -138,16 +97,14 @@ def main():
 
             # Get frameset of color and depth
             frames = pipeline.wait_for_frames()
-            # frames.get_depth_frame() is a 640x360 depth image
-
-            # Align the depth frame to color frame
             aligned_frames = align.process(frames)
-
-            # Get aligned frames
             aligned_depth_frame = aligned_frames.get_depth_frame() # aligned_depth_frame is a 640x480 depth image
+            depth_frame = decimation_filter.process(aligned_depth_frame)
+            depth_frame = spatial_filter.process(depth_frame)
+            depth_frame = temporal_filter.process(depth_frame)
+            depth_frame = hole_filter.process(depth_frame)
+            depth_frame = threshold_filter.process(depth_frame)
             color_frame = aligned_frames.get_color_frame()
-
-            # Validate that both frames are valid
             if not aligned_depth_frame or not color_frame:
                 continue
 
@@ -171,13 +128,16 @@ def main():
             # bitwise-AND mask and original image
             # masked_image = cv2.bitwise_and(color_image, color_image, mask= mask)
 
-            eroded_img = cv2.erode(mask, np.ones((2,2)))
-            dilated_img = cv2.erode(eroded_img, np.ones((2,2)))
+            eroded_img = cv2.erode(mask, np.ones((4,4)))
+            dilated_img = cv2.erode(eroded_img, np.ones((4,4)))
 
             closed_img = cv2.morphologyEx(dilated_img, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (5,5)), iterations=5)
 
             # drawing contours
-            contours, hierarchy = cv2.findContours(closed_img, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+            contours, hierarchy = cv2.findContours(closed_img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            cv2.drawContours(color_image, contours, -1, (0,255,0), 3)
+
+            depth_mask = cv2.bitwise_and(depth_image, depth_image, mask=mask)
 
             try:
                 max_contour = max(contours, key = cv2.contourArea)
@@ -186,7 +146,7 @@ def main():
                 cx = int(M['m10']/M['m00'])
                 cy = int(M['m01']/M['m00'])
 
-                depth_area = depth_image[cy-5:cy+5, cx-5:cx+5]
+                depth_area = depth_mask[cy-5:cy+5, cx-5:cx+5]
                 depth = depth_area.mean()
 
                 point = rs.rs2_deproject_pixel_to_point(intr, [cx,cy], depth)
@@ -205,22 +165,29 @@ def main():
                     std_y = np.std(points_array[:,1])
                     std_z = np.std(points_array[:,2])
 
-                    print(f"avg_x: {avg_x}, avg_y: {avg_y}, avg_z: {avg_z}")
-                    print(f"std_x: {std_x}, std_y: {std_y}, std_z: {std_z}")
+                    # print(f"avg_x: {avg_x}, avg_y: {avg_y}, avg_z: {avg_z}")
+                    # print(f"std_x: {std_x}, std_y: {std_y}, std_z: {std_z}")
 
                     points.clear()
 
                     thresh = 30
-                    if std_x < thresh and std_y < thresh and std_z < thresh:
-                        point = [avg_x, avg_y, avg_z]
-                        f.write(str(point[0]) + "\n" + str(point[1]) + "\n" + str(point[2]) + "\n")
-                        f.flush()
+                    
+                    with open("fifo_empty.txt","r") as f2:
+                        if std_x < thresh and std_y < thresh and std_z < thresh and f2.read() == "0":
+                            point = [avg_x, avg_y, avg_z]
+                            print("writing to fifo")
+                            print(f"point: {point[0]}, {point[1]}, {point[2]}")
+                            f1.write("")
+                            f1.write(str(point[0]) + "\n" + str(point[1]) + "\n" + str(point[2]) + "\n")
+                            f1.flush()
+                            f2.close()
+
+                            with open("fifo_empty.txt", "w") as file:
+                                file.write("1")
 
                 text = f"(x: {round(point[0])}, y: {round(point[1])}, z: {round(point[2])})"
 
                 color_image = cv2.putText(color_image, text, (cx-100,cy+40),cv2.FONT_HERSHEY_COMPLEX, 0.5, (255,255,255), 1)
-
-                cv2.drawContours(color_image, contours, -1, (0,255,0), 3)
 
                 cv2.circle(color_image,(cx,cy),10,(255,255,255),-1)
             except:
@@ -228,10 +195,12 @@ def main():
 
             # print(f"moment: {M}")
 
-            
+            depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(
+                depth_image, alpha=0.03), cv2.COLORMAP_JET)
 
             # cv2.imshow('original', hsv)
             # cv2.imshow('mask', mask)
+            # cv2.imshow('depth', depth_colormap)
             cv2.imshow('image', color_image)
             
             key = cv2.waitKey(1) & 0xFF
