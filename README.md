@@ -16,4 +16,10 @@ Once this trajectory is finished, the gripper will close, and the robot will hav
 
 I completed this project before I knew anything about ROS or basic robotics math like transformation matrices. I plan to go back and redo the project at some point in the near future to improve upon it, and to learn more about computer vision in the process.
 
-https://youtube.com/shorts/Rj9usSjpX2c?feature=share
+## Gallery
+
+**Computer Vision**
+[![Pen Vision](https://img.youtube.com/vi/dudBlyBsvok/0.jpg)](https://youtube.com/shorts/dudBlyBsvok?si=K0l7IiKLe3kxetTm "Pen Vision")
+
+**Project Demo**
+[![project demo](https://img.youtube.com/vi/xdqtf6kgfiU/0.jpg)](https://youtube.com/shorts/xdqtf6kgfiU?si=K0l7IiKLe3kxetTm "project demo")
